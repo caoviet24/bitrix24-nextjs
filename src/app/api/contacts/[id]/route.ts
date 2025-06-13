@@ -1,105 +1,182 @@
-import bitrixConfig from '@/configs/bitrixConfig';
-import { mapNormalizedToBitrixContact } from '@/utils/normalizeContact';
-import axios from 'axios';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { ContactController } from '../controllers/contact.controller';
 
-export async function PUT(request: NextRequest) {
-    const body = await request.json();
-    const searchParams = request.nextUrl.searchParams;
-    const { contact } = body;
-    const mappedContact = mapNormalizedToBitrixContact(contact);
-    const accessToken = searchParams.get('access_token');
+const contactController = new ContactController();
 
-    if (!mappedContact) {
-        return NextResponse.json({ error: 'Invalid contact data' }, { status: 400 });
-    }
-    if (!accessToken) {
-        return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
-    }
-
-    try {
-        let phoneNumber = contact.PHONE?.[0]?.VALUE || '';
-        if (phoneNumber.startsWith('0')) {
-            phoneNumber = phoneNumber.replace('0', '+84');
-        }
-
-        const mappedContact = {
-            ...mapNormalizedToBitrixContact(contact),
-            PHONE: [
-                {
-                    ID: contact.PHONE?.[0]?.ID || '',
-                    VALUE: phoneNumber,
-                    VALUE_TYPE: contact.PHONE?.[0]?.VALUE_TYPE || 'WORK',
-                    TYPE_ID: contact.PHONE?.[0]?.TYPE_ID || '',
-                },
-            ],
-        };
-
-        const response = await axios.post(`${bitrixConfig.domain}/rest/crm.contact.update`, {
-            auth: accessToken,
-            id: contact.ID,
-            fields: mappedContact,
-        });
-
-        const data = response.data;
-
-        if (data.error) {
-            return NextResponse.json({ error: data.error_description || data.error }, { status: 400 });
-        }
-
-        return NextResponse.json({
-            success: true,
-            updated: data.result,
-        });
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            return NextResponse.json(
-                { error: 'Unauthorized access. Please check your access token.' },
-                { status: 401 },
-            );
-        }
-
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
-    }
+/**
+ * @swagger
+ * /contacts/{id}:
+ *   put:
+ *     summary: Update a contact
+ *     description: Update an existing contact by ID
+ *     tags: [Contacts]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Contact ID
+ *       - name: access_token
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Authentication token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contact
+ *             properties:
+ *               contact:
+ *                 type: object
+ *                 properties:
+ *                   NAME:
+ *                     type: string
+ *                   PHONE:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         ID:
+ *                           type: string
+ *                         VALUE:
+ *                           type: string
+ *                         VALUE_TYPE:
+ *                           type: string
+ *                           default: WORK
+ *                   EMAIL:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         ID:
+ *                           type: string
+ *                         VALUE:
+ *                           type: string
+ *                         VALUE_TYPE:
+ *                           type: string
+ *                           default: WORK
+ *                   WEB:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         ID:
+ *                           type: string
+ *                         VALUE:
+ *                           type: string
+ *                         VALUE_TYPE:
+ *                           type: string
+ *                           default: WORK
+ *                   UF_CRM_1749491137:
+ *                     type: string
+ *                     description: Address
+ *                   REQUISITES:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         BANK_DETAIL:
+ *                           type: object
+ *                           properties:
+ *                             RQ_BANK_NAME:
+ *                               type: string
+ *                             RQ_ACC_NUM:
+ *                               type: string
+ *     responses:
+ *       200:
+ *         description: Contact updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 updated:
+ *                   type: boolean
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    console.log(`Updating contact with ID: ${id}`, request.body);
+    return contactController.updateContact(request, id);
 }
 
+/**
+ * @swagger
+ * /contacts/{id}:
+ *   delete:
+ *     summary: Delete a contact
+ *     description: Delete an existing contact by ID
+ *     tags: [Contacts]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Contact ID
+ *       - name: access_token
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Authentication token
+ *     responses:
+ *       200:
+ *         description: Contact deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 deleted:
+ *                   type: boolean
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const accessToken = request.nextUrl.searchParams.get('access_token');
-
-    if (!id) {
-        return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 });
-    }
-    if (!accessToken) {
-        return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
-    }
-
-    try {
-        const response = await axios.post(`${bitrixConfig.domain}/rest/crm.contact.delete`, {
-            auth: accessToken,
-            id: id,
-        });
-
-        const data = response.data;
-
-        if (data.error) {
-            return NextResponse.json({ error: data.error_description || data.error }, { status: 400 });
-        }
-
-        return NextResponse.json({
-            success: true,
-            deleted: data.result,
-        });
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            return NextResponse.json(
-                { error: 'Unauthorized access. Please check your access token.' },
-                { status: 401 },
-            );
-        }
-
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
-    }
+    return contactController.deleteContact(request, id);
 }

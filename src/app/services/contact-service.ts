@@ -1,35 +1,40 @@
 import axiosClient from '@/utils/axios-instance';
-import {  ContactClient, ContactsResponse } from '@/types/index';
+import { IContactClient, IContactsResponse } from '@/types/index';
 import { ContactFilters } from '@/components/ContactFilters';
 
 async function getList({
     search = '',
     start = 0,
-    filters = { province: '', phone: '', email: '', bankName: '', accountNumber: ''},
+    filters = { province: '', phone: '', email: '', bankName: '', accountNumber: '' },
 }: {
-    search?: string;
+    search?: string | undefined;
     start?: number;
     filters?: ContactFilters;
-}): Promise<ContactsResponse> {
-    const params = new URLSearchParams({
-        search,
-        start: start.toString(),
-        filters: JSON.stringify(filters),
-    });
-
+}): Promise<IContactsResponse> {
+    const params = new URLSearchParams();
+    if (search) {
+        params.append('search', search);
+    }
+    if (filters) {
+        params.append('filters', JSON.stringify(filters));
+    }
+    params.append('start', start.toString());
 
     const res = await axiosClient.get(`/api/contacts?${params.toString()}`);
+
     return res.data;
 }
 
-async function create(contactData: ContactClient) {
+export type IContactPayLoad = IContactClient;
+
+async function create(contactData: IContactPayLoad) {
     const res = await axiosClient.post('/api/contacts', {
         contact: contactData,
     });
     return res.data;
 }
 
-async function update(id: string, contactData: ContactClient) {
+async function update(id: string, contactData: IContactPayLoad) {
     const res = await axiosClient.put(`/api/contacts/${id}`, {
         contact: contactData,
     });

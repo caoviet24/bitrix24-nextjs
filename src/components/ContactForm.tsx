@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { contactService } from '@/app/services/contact-service';
+import { contactService, IContactPayLoad } from '@/app/services/contact-service';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Loader } from 'lucide-react';
@@ -25,7 +25,7 @@ import validatePhoneVN from '@/utils/validatePhoneVN';
 import ProvinceCombobox, { Province } from '@/components/ProvinceCombobox';
 import DistrictCombobox, { District } from '@/components/DistrictCombobox';
 import WardCombobox, { Ward } from '@/components/WardCombobox';
-import { ContactClient } from '@/types';
+import { IContactClient } from '@/types';
 
 const contactFormSchema = z.object({
     NAME: z.string().min(1, 'Tên là bắt buộc'),
@@ -64,7 +64,7 @@ type ContactFormValues = z.infer<typeof contactFormSchema>;
 interface ContactFormProps {
     isOpen: boolean;
     onClose: () => void;
-    contact?: ContactClient | null;
+    contact?: IContactClient | null;
     mode: 'create' | 'edit' | 'view' | 'delete';
 }
 
@@ -98,7 +98,6 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
         },
     });
 
-    // Location handlers
     const handleProvinceSelect = async (province: Province) => {
         setProvince(province);
         setDistrict(null);
@@ -109,16 +108,16 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
     const handleDistrictSelect = async (district: District) => {
         setDistrict(district);
         setWard(null);
-        form.setValue('ADDRESS', `${province?.name}, ${district.name}`);
+        form.setValue('ADDRESS', `${district.name}, ${province?.name}`);
     };
 
     const handleWardSelect = async (ward: Ward) => {
         setWard(ward);
-        form.setValue('ADDRESS', `${province?.name}, ${district?.name}, ${ward.name}`);
+        form.setValue('ADDRESS', `${ward.name}, ${district?.name}, ${province?.name}`);
     };
 
     const createContactMutation = useMutation({
-        mutationFn: (data: ContactClient) => contactService.create(data),
+        mutationFn: (data: IContactPayLoad) => contactService.create(data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['contacts'] });
             toast.success('Tạo liên hệ thành công!');
@@ -130,7 +129,7 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
     });
 
     const updateContactMutation = useMutation({
-        mutationFn: (data: ContactClient) => contactService.update(contact?.ID || '', data),
+        mutationFn: (data: IContactPayLoad) => contactService.update(contact?.ID || '', data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['contacts'] });
             toast.success('Cập nhật liên hệ thành công!');
@@ -160,13 +159,10 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
         deleteContactMutation.isPending;
 
     const onSubmit = async (data: ContactFormValues) => {
-        const formData: ContactClient = {
+        const formData: IContactPayLoad = {
             ID: contact?.ID || '',
             NAME: data.NAME,
             ADDRESS: data.ADDRESS || '',
-            ADDRESS_CITY: data.ADDRESS_CITY || '',
-            ADDRESS_REGION: data.ADDRESS_DISTRICT || '',
-            ADDRESS_PROVINCE: data.ADDRESS_WARD || '',
             EMAIL: data.EMAIL
                 ? [
                       {
@@ -197,8 +193,22 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
                       },
                   ]
                 : undefined,
-            BANK_NAME: data.BANK_NAME || null,
-            ACCOUNT_NUMBER: data.ACCOUNT_NUMBER || null,
+            REQUISITES: [
+                {
+                    ID: contact?.REQUISITES?.[0]?.ID || '',
+                    ENTITY_TYPE_ID: 4, 
+                    ENTITY_ID: contact?.ID || '',
+                    PRESET_ID: contact?.REQUISITES?.[0]?.PRESET_ID || 0,
+                    BANK_DETAIL: {
+                        ID: contact?.REQUISITES?.[0]?.BANK_DETAIL?.ID || '',
+                        NAME: contact?.REQUISITES?.[0]?.BANK_DETAIL?.NAME || '',
+                        ENTITY_ID: contact?.REQUISITES?.[0]?.ID || '',
+                        ENTITY_TYPE_ID: 4,
+                        RQ_BANK_NAME: data.BANK_NAME,
+                        RQ_ACC_NUM: data.ACCOUNT_NUMBER,
+                    },
+                }
+            ]
         };
 
         if (formData.PHONE && formData.PHONE[0]?.VALUE && !validatePhoneVN(formData.PHONE[0].VALUE)) {
@@ -255,10 +265,6 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
             form.reset({
                 NAME: contact.NAME || '',
                 ADDRESS: contact.ADDRESS || '',
-                ADDRESS_CITY: contact.ADDRESS_CITY || '',
-                ADDRESS_DISTRICT: contact.ADDRESS_REGION || '',
-                ADDRESS_WARD: contact.ADDRESS_PROVINCE || '',
-
                 EMAIL_VALUE_ID: contact.EMAIL?.[0]?.ID || '',
                 EMAIL: contact.EMAIL?.[0]?.VALUE || '',
                 EMAIL_VALUE_TYPE: contact.EMAIL?.[0]?.VALUE_TYPE || 'WORK',
@@ -274,8 +280,8 @@ function ContactForm({ isOpen, onClose, contact, mode }: ContactFormProps) {
                 WEB_VALUE_TYPE: contact.WEB?.[0]?.VALUE_TYPE || 'WORK',
                 WEB_VALUE_TYPE_ID: contact.WEB?.[0]?.TYPE_ID || '',
 
-                BANK_NAME: contact.BANK_NAME || '',
-                ACCOUNT_NUMBER: contact.ACCOUNT_NUMBER || '',
+                BANK_NAME: contact.REQUISITES?.[0]?.BANK_DETAIL?.RQ_BANK_NAME || '',
+                ACCOUNT_NUMBER: contact.REQUISITES?.[0]?.BANK_DETAIL?.RQ_ACC_NUM || '',
             });
         }
     }, [contact, form, mode]);

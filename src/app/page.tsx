@@ -21,14 +21,14 @@ import {
     CircleFadingPlus,
     House,
 } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useDebounce from './hooks/use-debounce';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import ContactForm from '@/components/ContactForm';
 import ContactFilters, { ContactFilters as FilterType } from '@/components/ContactFilters';
-import { ContactClient } from '@/types';
+import { IContactClient } from '@/types';
 
 export default function Home() {
     const [searchValue, setSearchValue] = useState('');
@@ -39,14 +39,14 @@ export default function Home() {
         bankName: '',
         accountNumber: '',
     });
-    const [contactSelected, setContactSelected] = useState<ContactClient | null>(null);
+    const [contactSelected, setContactSelected] = useState<IContactClient | null>(null);
     const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'view' | 'delete'>('create');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
 
     const searchValueDebounced = useDebounce({ value: searchValue, delay: 500 });
 
-    const { data: contactsData, isLoading } = useQuery({
+    const { data: contactsData, isLoading, isSuccess } = useQuery({
         queryKey: ['contacts', searchValueDebounced, currentPage, filters],
         queryFn: () =>
             contactService.getList({
@@ -56,6 +56,12 @@ export default function Home() {
             }),
         enabled: !!bitrixConfig.accessToken && !!bitrixConfig.refreshToken,
     });
+
+    useEffect(() => {
+        if (isSuccess) {
+            console.log('contactdata:',contactsData);
+        }
+    }, [contactsData, isSuccess]);
 
     const handleSearchChange = (value: string) => {
         setSearchValue(value);
@@ -84,19 +90,19 @@ export default function Home() {
         setIsDialogOpen(true);
     };
 
-    const handleEditContact = (contact: ContactClient) => {
+    const handleEditContact = (contact: IContactClient) => {
         setContactSelected(contact);
         setDialogMode('edit');
         setIsDialogOpen(true);
     };
 
-    const handleViewContact = (contact: ContactClient) => {
+    const handleViewContact = (contact: IContactClient) => {
         setContactSelected(contact);
         setDialogMode('view');
         setIsDialogOpen(true);
     };
 
-    const handleDeleteContact = (contact: ContactClient) => {
+    const handleDeleteContact = (contact: IContactClient) => {
         setContactSelected(contact);
         setDialogMode('delete');
         setIsDialogOpen(true);
@@ -271,7 +277,7 @@ export default function Home() {
                                     <TableBody>
                                         {contactsData?.contacts &&
                                             contactsData.contacts.length > 0 &&
-                                            contactsData?.contacts.map((contact: ContactClient) => (
+                                            contactsData?.contacts.map((contact: IContactClient) => (
                                                 <TableRow key={`${contact.ID}`} className="contact-row">
                                                     <TableCell className="font-mono">{contact.ID}</TableCell>
                                                     <TableCell className="font-medium">
@@ -332,10 +338,12 @@ export default function Home() {
                                                     <TableCell>
                                                         <div className="flex flex-col items-center gap-1">
                                                             <span className="px-2 py-1 max-w-20 text-center bg-blue-100 text-blue-800 text-xs rounded-full">
-                                                                {contact.BANK_NAME || 'N/A'}
+                                                                {contact.REQUISITES?.[0]?.BANK_DETAIL?.RQ_BANK_NAME ||
+                                                                    'N/A'}
                                                             </span>
                                                             <span className="text-base underline text-blue-600 shadow text-center">
-                                                                {contact.ACCOUNT_NUMBER || 'N/A'}
+                                                                {contact.REQUISITES?.[0]?.BANK_DETAIL?.RQ_ACC_NUM ||
+                                                                    'N/A'}
                                                             </span>
                                                         </div>
                                                     </TableCell>

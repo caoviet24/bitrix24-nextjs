@@ -1,181 +1,193 @@
-import bitrixConfig from '@/configs/bitrixConfig';
-import { ContactServer } from '@/types';
-import { mapBitrixContactToNormalized, mapNormalizedToBitrixContact } from '@/utils/normalizeContact';
-import axios from 'axios';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { ContactController } from './controllers/contact.controller';
 
+const contactController = new ContactController();
+
+/**
+ * @swagger
+ * /contacts:
+ *   get:
+ *     summary: Get a list of contacts with optional filtering
+ *     description: Retrieve a list of contacts with options for filtering by name, email, phone, province, bank name, and account number.
+ *     tags: [Contacts]
+ *     parameters:
+ *       - name: access_token
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Authentication token
+ *       - name: search
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Search term for contact name
+ *       - name: filters
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: JSON string with filter options (province, phone, email, bankName, accountNumber)
+ *       - name: start
+ *         in: query
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Pagination start index
+ *     responses:
+ *       200:
+ *         description: A list of contacts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 contacts:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Contact'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     start:
+ *                       type: integer
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export async function GET(request: NextRequest) {
-    const searchParams = request.nextUrl.searchParams;
-    const searchValue = searchParams.get('search');
-    const filters = searchParams.get('filters');
-    const start = searchParams.get('start') || '0';
-
-    const parsedFilters = filters ? JSON.parse(filters) : {};
-    const { province, phone, email, bankName, accountNumber } = parsedFilters;
-
-    const filtersObj: Record<string, string | number> = {};
-
-    if (searchValue) {
-        filtersObj['%NAME'] = searchValue;
-    }
-
-    if (province) {
-        filtersObj['UF_CRM_1749491137'] = province;
-    }
-
-    if (phone) {
-        if (phone.startsWith('0')) {
-            const phoneVN = phone.replace('0', '+84');
-            filtersObj['PHONE'] = phoneVN;
-        }
-    }
-
-    if (email) {
-        filtersObj['EMAIL'] = email;
-    }
-
-    if (bankName) {
-        filtersObj['UF_CRM_1749488806735'] = bankName;
-    }
-
-    if (accountNumber) {
-        filtersObj['UF_CRM_1749488831655'] = accountNumber;
-    }
-
-
-    const accessToken = searchParams.get('access_token');
-
-    if (!accessToken) {
-        return NextResponse.json({ error: 'Access token is required' }, { status: 400 });
-    }
-
-    try {
-        const response = await axios.post(`${bitrixConfig.domain}/rest/crm.contact.list`, {
-            auth: accessToken,
-            filter: filtersObj,
-            select: [
-                'ID',
-                'NAME',
-                'ADDRESS',
-                'ADDRESS_2',
-                'ADDRESS_CITY',
-                'ADDRESS_POSTAL_CODE',
-                'ADDRESS_REGION',
-                'ADDRESS_PROVINCE',
-                'ADDRESS_COUNTRY',
-                'ADDRESS_COUNTRY_CODE',
-                'ADDRESS_LOC_ADDR_ID',
-                'EMAIL',
-                'WEB',
-                'PHONE',
-                'UF_CRM_1749491137', //Address
-                'UF_CRM_1749488806735', // Bank name
-                'UF_CRM_1749488831655', // Bank account number
-            ],
-            start: parseInt(start, 10),
-            order: { ID: 'ASC' },
-        });
-
-        const data = response.data;
-
-        if (data.error) {
-            return NextResponse.json({ error: data.error_description || data.error }, { status: 400 });
-        }
-
-        return NextResponse.json({
-            success: true,
-            contacts: data.result.map((contact: ContactServer) => {
-                let phoneNumber = contact.PHONE?.[0]?.VALUE || '';
-                if (phoneNumber.startsWith('+84')) {
-                    phoneNumber = phoneNumber.replace('+84', '0');
-                }
-
-                return mapBitrixContactToNormalized({
-                    ...contact,
-                    PHONE: [
-                        {
-                            ID: contact.PHONE?.[0]?.ID || '',
-                            VALUE: phoneNumber,
-                            VALUE_TYPE: contact.PHONE?.[0]?.VALUE_TYPE || 'WORK',
-                            TYPE_ID: contact.PHONE?.[0]?.TYPE_ID || '',
-                        },
-                    ],
-                });
-            }),
-            pagination: {
-                total: data.total || 0,
-                start: parseInt(start, 10),
-            },
-        });
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            return NextResponse.json(
-                { error: 'Unauthorized access. Please check your access token.' },
-                { status: 401 },
-            );
-        }
-
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
-    }
+    return contactController.getContacts(request);
 }
 
+/**
+ * @swagger
+ * /contacts:
+ *   post:
+ *     summary: Create a new contact
+ *     description: Create a new contact with optional bank details
+ *     tags: [Contacts]
+ *     parameters:
+ *       - name: access_token
+ *         in: query
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Authentication token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contact
+ *             properties:
+ *               contact:
+ *                 type: object
+ *                 properties:
+ *                   NAME:
+ *                     type: string
+ *                   PHONE:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         VALUE:
+ *                           type: string
+ *                         VALUE_TYPE:
+ *                           type: string
+ *                           default: WORK
+ *                   EMAIL:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         VALUE:
+ *                           type: string
+ *                         VALUE_TYPE:
+ *                           type: string
+ *                           default: WORK
+ *                   WEB:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         VALUE:
+ *                           type: string
+ *                         VALUE_TYPE:
+ *                           type: string
+ *                           default: WORK
+ *                   UF_CRM_1749491137:
+ *                     type: string
+ *                     description: Address
+ *                   REQUISITES:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         BANK_DETAIL:
+ *                           type: object
+ *                           properties:
+ *                             RQ_BANK_NAME:
+ *                               type: string
+ *                             RQ_ACC_NUM:
+ *                               type: string
+ *     responses:
+ *       200:
+ *         description: Contact created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 contactId:
+ *                   type: string
+ *                 requisiteId:
+ *                   type: string
+ *                 bankDetailId:
+ *                   type: string
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 export async function POST(request: NextRequest) {
-    const body = await request.json();
-    const searchParams = request.nextUrl.searchParams;
-    const accessToken = searchParams.get('access_token');
-    const { contact } = body;
-
-    if (!contact) {
-        return NextResponse.json({ error: 'Contact data is required' }, { status: 400 });
-    }
-
-    if (!accessToken) {
-        return NextResponse.json({ error: 'Not authorized' }, { status: 401 });
-    }
-
-    try {
-        let phoneNumber = contact.PHONE?.[0]?.VALUE || '';
-        if (phoneNumber.startsWith('0')) {
-            phoneNumber = phoneNumber.replace('0', '+84');
-        }
-
-        const mappedContact = {
-            ...mapNormalizedToBitrixContact(contact),
-            PHONE: [
-                {
-                    ID: contact.PHONE?.[0]?.ID || '',
-                    VALUE: phoneNumber,
-                    VALUE_TYPE: contact.PHONE?.[0]?.VALUE_TYPE || 'WORK',
-                    TYPE_ID: contact.PHONE?.[0]?.TYPE_ID || '',
-                },
-            ],
-        };
-
-        const response = await axios.post(`${bitrixConfig.domain}/rest/crm.contact.add`, {
-            auth: accessToken,
-            fields: mappedContact,
-        });
-
-        const data = await response.data;
-
-        if (data.error) {
-            return NextResponse.json({ error: data.error_description || data.error }, { status: 400 });
-        }
-
-        return NextResponse.json({
-            success: true,
-            contactId: data.result,
-        });
-    } catch (error: unknown) {
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-            return NextResponse.json(
-                { error: 'Unauthorized access. Please check your access token.' },
-                { status: 401 },
-            );
-        }
-
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
-    }
+    return contactController.createContact(request);
 }
